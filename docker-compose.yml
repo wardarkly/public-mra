@@ -7,6 +7,7 @@ services:
       MYSQL_USER: ${MRA_DB_USER:-mra_user}
       MYSQL_PASSWORD: ${MRA_DB_PASSWORD:?Set MRA_DB_PASSWORD in .env}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      TZ: Asia/Bangkok
     volumes:
       - mra_mysql_data:/var/lib/mysql
       - ./database/db_mra_prod_202610091047.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
