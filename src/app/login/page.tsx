@@ -74,15 +74,17 @@ export default function LoginPage() {
 
     setErrorMsg('');
     setSuccessMsg('');
-    setEulaModalMode('login_confirm');
-    setIsEulaModalOpen(true);
+    void executeLogin();
+    // setEulaModalMode('login_confirm');
+
+    // setIsEulaModalOpen(true);
   };
 
   const handleEulaAccepted = () => {
     setIsEulaModalOpen(false);
-    if (eulaModalMode === 'login_confirm') {
-      void executeLogin();
-    }
+    // if (eulaModalMode === 'login_confirm') {
+    //   void executeLogin();
+    // }
   };
 
   const executeLogin = async () => {
@@ -662,7 +664,7 @@ export default function LoginPage() {
         isOpen={isEulaModalOpen}
         onClose={() => setIsEulaModalOpen(false)}
         onAccept={handleEulaAccepted}
-        acceptLabel={eulaModalMode === 'login_confirm' ? 'ยอมรับข้อตกลงและเข้าสู่ระบบ' : 'รับทราบและยอมรับข้อตกลง'}
+        acceptLabel={'รับทราบและยอมรับข้อตกลง'}
       />
     </div>
   );
