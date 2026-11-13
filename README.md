@@ -155,6 +155,57 @@ pm2 save
 pm2 startup
 ```
 
+### 6. Deploy ด้วย Docker Compose
+
+#### Requirements
+
+- Docker Engine หรือ Docker Desktop พร้อม Docker Compose v2
+- เครือข่ายจาก app container ไปยังฐานข้อมูล HIS/HOSxP หากต้องใช้ข้อมูล HIS
+
+#### Configure and start
+
+ติดตั้ง Git และ Docker Engine หรือ Docker Desktop พร้อม Docker Compose v2 ตามระบบปฏิบัติการ จากนั้น clone repository และเข้าโฟลเดอร์โปรเจกต์:
+
+```bash
+git clone https://github.com/witsanu-dev/public-mra.git
+cd public-mra
+```
+
+หรือ clone จาก repository นี้แทน:
+
+```bash
+git clone https://github.com/wardarkly/public-mra.git
+cd public-mra
+```
+
+หากเลือก clone จาก `witsanu-dev/public-mra` ให้ดาวน์โหลดไฟล์ Docker ที่ยังไม่มีใน repository นั้นจาก `wardarkly/public-mra` ก่อน (ถ้าเลือก clone จาก `wardarkly/public-mra` อยู่แล้ว ข้ามขั้นตอนนี้ได้):
+
+```bash
+curl -fL https://raw.githubusercontent.com/wardarkly/public-mra/main/Dockerfile -o Dockerfile
+curl -fL https://raw.githubusercontent.com/wardarkly/public-mra/main/docker-compose.yml -o docker-compose.yml
+curl -fL https://raw.githubusercontent.com/wardarkly/public-mra/main/.dockerignore -o .dockerignore
+```
+
+สร้างไฟล์ environment:
+
+```bash
+cp .env.example .env
+```
+
+แก้ `.env` ก่อนเริ่มใช้งาน โดยกำหนดรหัสผ่านที่คาดเดายากและไม่ซ้ำกันสำหรับ `MYSQL_ROOT_PASSWORD` และ `MRA_DB_PASSWORD` รวมถึงกำหนด `ADMIN_SETUP_KEY` และ `SESSION_SECRET` ให้ปลอดภัย ตั้งค่า `HIS_DB_HOST`, `HIS_DB_PORT`, `HIS_DB_DATABASE`, `HIS_DB_USER` และ `HIS_DB_PASSWORD` ให้ app container เชื่อมต่อ HIS ได้จริง (ไม่ควรใช้ `127.0.0.1` เว้นแต่ HIS อยู่ใน container เดียวกัน)
+
+จากนั้น build และเริ่มบริการ:
+
+```bash
+docker compose up -d --build
+docker compose ps
+docker compose logs -f app
+```
+
+แอปจะเปิดพอร์ต `3000` และ MySQL MRA จะทำงานใน Compose network ที่พอร์ต `3306` โดย Compose จะรอให้ฐานข้อมูลพร้อมก่อนเริ่ม app ครั้งแรกจะนำเข้าเฉพาะโครงสร้างตารางจาก `database/db_mra_prod_202610091047.sql` ไม่ได้นำเข้าข้อมูลแถวจาก production
+
+สำหรับรายละเอียดคำสั่งจัดการและการสำรองฐานข้อมูล ดู [docs/DOCKER.md](docs/DOCKER.md)
+
 ---
 
 ## 👨‍💻 ผู้พัฒนาและหน่วยงานรับผิดชอบ (Developer & Maintainer)
