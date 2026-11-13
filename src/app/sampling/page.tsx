@@ -13,6 +13,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { RBAC } from '@/lib/rbac';
 import { BatchSummaryModal } from '@/components/mra/BatchSummaryModal';
 import { ManualSamplingModal } from '@/components/mra/ManualSamplingModal';
+import { DoctorSamplingControls, DoctorSamplingPlanItem, SamplingDoctor } from '@/components/mra/DoctorSamplingControls';
 
 interface ClinicOption {
   clinic: string;
@@ -99,6 +100,9 @@ export default function SamplingPage() {
     defaultStart: new Date().toISOString().split('T')[0],
   });
   const [clinics, setClinics] = useState<ClinicOption[]>([]);
+  const [doctors, setDoctors] = useState<SamplingDoctor[]>([]);
+  const [doctorPlan, setDoctorPlan] = useState<DoctorSamplingPlanItem[]>([]);
+  const [doctorsLoading, setDoctorsLoading] = useState(false);
   const [metaLoading, setMetaLoading] = useState(true);
   const [isHisOffline, setIsHisOffline] = useState(false);
 
@@ -180,6 +184,8 @@ export default function SamplingPage() {
     async function loadMeta() {
       try {
         setMetaLoading(true);
+        setDoctorsLoading(true);
+        const doctorsPromise = fetch(apiUrl('/api/his/doctors')).then((res) => res.json()).catch(() => null);
         const res = await fetch(apiUrl('/api/his/meta'));
         const json = await res.json().catch(() => null);
         if (json?.isHisOffline) {
@@ -191,9 +197,12 @@ export default function SamplingPage() {
           setHospitalInfo(json.data);
           setClinics(json.data.clinics || []);
         }
+        const doctorJson = await doctorsPromise;
+        setDoctors(doctorJson?.data || []);
       } catch {
         setIsHisOffline(true);
       } finally {
+        setDoctorsLoading(false);
         setMetaLoading(false);
       }
     }
@@ -268,6 +277,7 @@ export default function SamplingPage() {
           caseType,
           clinicCode: caseType === 'chronic' ? clinicCode : undefined,
           sampleSize,
+          doctorPlan,
           auditorName: user?.fullName || 'Auditor',
         }),
       });
@@ -322,6 +332,7 @@ export default function SamplingPage() {
       setSampleSearchQuery('');
       setSampleStatusFilter('all');
       loadHistory();
+
 
       alertSuccess({
         title: 'สุ่มตัวอย่างสำเร็จ',
@@ -969,6 +980,7 @@ export default function SamplingPage() {
                   </button>
                 </div>
               </div>
+              <DoctorSamplingControls doctors={doctors} plan={doctorPlan} onChange={setDoctorPlan} disabled={isSampling || isHisOffline} loading={doctorsLoading} />
             </CardContent>
           </Card>
 

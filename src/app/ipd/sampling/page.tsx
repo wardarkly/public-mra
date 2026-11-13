@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { BatchSummaryModal } from '@/components/mra/BatchSummaryModal';
 import { ManualSamplingModal } from '@/components/mra/ManualSamplingModal';
+import { DoctorSamplingControls, DoctorSamplingPlanItem, SamplingDoctor } from '@/components/mra/DoctorSamplingControls';
 
 interface WardOption {
   ward: string;
@@ -127,6 +128,9 @@ export default function IpdSamplingPage() {
     defaultStart: new Date().toISOString().split('T')[0],
   });
   const [wards, setWards] = useState<WardOption[]>([]);
+  const [doctors, setDoctors] = useState<SamplingDoctor[]>([]);
+  const [doctorPlan, setDoctorPlan] = useState<DoctorSamplingPlanItem[]>([]);
+  const [doctorsLoading, setDoctorsLoading] = useState(false);
   const [metaLoading, setMetaLoading] = useState(true);
   const [isHisOffline, setIsHisOffline] = useState(false);
 
@@ -285,6 +289,8 @@ export default function IpdSamplingPage() {
     async function loadMeta() {
       try {
         setMetaLoading(true);
+        setDoctorsLoading(true);
+        const doctorsPromise = fetch(apiUrl('/api/his/doctors')).then((res) => res.json()).catch(() => null);
         const res = await fetch(apiUrl('/api/his/ipd-meta'));
         const json = await res.json().catch(() => null);
         if (json?.isHisOffline) {
@@ -296,9 +302,12 @@ export default function IpdSamplingPage() {
           setHospitalInfo(json.data);
           setWards(json.data.wards || []);
         }
+        const doctorJson = await doctorsPromise;
+        setDoctors(doctorJson?.data || []);
       } catch {
         setIsHisOffline(true);
       } finally {
+        setDoctorsLoading(false);
         setMetaLoading(false);
       }
     }
@@ -380,6 +389,7 @@ export default function IpdSamplingPage() {
           dateFrom,
           dateTo,
           sampleSize,
+          doctorPlan,
           wardCode: wardCode || undefined,
           batchName: batchName.trim() || undefined,
           note: batchNote.trim() || undefined,
@@ -1065,6 +1075,8 @@ export default function IpdSamplingPage() {
                   />
                 </div>
               </div>
+
+              <DoctorSamplingControls doctors={doctors} plan={doctorPlan} onChange={setDoctorPlan} disabled={isSampling || isHisOffline} loading={doctorsLoading} />
 
               {/* Action Buttons */}
               <div className="flex flex-wrap items-center justify-end gap-2.5 pt-3 border-t border-slate-100">

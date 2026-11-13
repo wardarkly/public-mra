@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
       clinicCode = '',
       sampleSize = 10,
       auditorName = 'Auditor',
+      doctorPlan = [],
     } = body;
 
     if (!dateFrom || !dateTo) {
@@ -118,7 +119,17 @@ export async function POST(req: NextRequest) {
       WHERE ${whereSql}
     `;
     const [countResult] = await queryHis<RowDataPacket[]>(countSql, queryParams);
-    const totalAvailable = countResult?.total || 0;
+    let totalAvailable = Number(countResult?.total) || 0;
+    const normalizedPlan = Array.isArray(doctorPlan) ? doctorPlan
+      .filter((item: any) => item && String(item.doctorCode || '').trim())
+      .slice(0, 50)
+      .map((item: any) => ({
+        doctorCode: String(item.doctorCode).trim(),
+        doctorName: String(item.doctorName || '').trim(),
+        mode: item.mode === 'percent' ? 'percent' : 'count',
+        value: Math.max(1, Math.min(item.mode === 'percent' ? 100 : 200, parseInt(String(item.value), 10) || 1)),
+      })) : [];
+    let doctorSampleSummary: Array<{ doctorCode: string; doctorName: string; available: number; requested: number; sampled: number; mode: string; value: number }> = [];
 
     if (totalAvailable === 0) {
       return NextResponse.json({
@@ -164,16 +175,48 @@ export async function POST(req: NextRequest) {
       LIMIT ?
     `;
 
-    const sampleParams = [...queryParams, size];
-    const samples = await queryHis<HisVisitSampleRow[]>(sampleSql, sampleParams);
+    let samples: HisVisitSampleRow[] = [];
+    if (normalizedPlan.length) {
+      const seenCodes = new Set<string>();
+      doctorSampleSummary = [];
+      totalAvailable = 0;
+      for (const plan of normalizedPlan) {
+        if (seenCodes.has(plan.doctorCode)) continue;
+        seenCodes.add(plan.doctorCode);
+        const doctorFilter = ` AND o.doctor = ?`;
+        const [availableRow] = await queryHis<RowDataPacket[]>(
+          `SELECT COUNT(DISTINCT o.vn) AS total FROM ovst o LEFT JOIN vn_stat v ON v.vn = o.vn LEFT JOIN kskdepartment k ON k.depcode = o.cur_dep ${extraJoin} WHERE ${whereSql}${doctorFilter}`,
+          [...queryParams, plan.doctorCode]
+        );
+        const available = Number(availableRow?.total) || 0;
+        const requested = plan.mode === 'percent' ? Math.ceil(available * plan.value / 100) : plan.value;
+        const targetSize = Math.min(available, requested);
+        totalAvailable += available;
+        const doctorSamples = targetSize > 0
+          ? await queryHis<HisVisitSampleRow[]>(sampleSql.replace(`WHERE ${whereSql}`, `WHERE ${whereSql}${doctorFilter}`), [...queryParams, plan.doctorCode, targetSize])
+          : [];
+        samples.push(...doctorSamples);
+        doctorSampleSummary.push({ doctorCode: plan.doctorCode, doctorName: plan.doctorName || doctorSamples[0]?.doctor_name || plan.doctorCode, available, requested, sampled: doctorSamples.length, mode: plan.mode, value: plan.value });
+      }
+    } else {
+      samples = await queryHis<HisVisitSampleRow[]>(sampleSql, [...queryParams, size]);
+    }
+
+    if (normalizedPlan.length > 0 && samples.length === 0) {
+      return NextResponse.json({ success: true, data: { batchId: null, totalAvailable, sampleCount: 0, samples: [], doctorSampleSummary, message: 'ไม่พบ visits ของแพทย์ที่เลือกตามเงื่อนไขนี้' } });
+    }
 
     // 2. Save Sampling Batch into db_mra (guaranteed UTF-8)
     const batchId = `BATCH-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
+    const planNote = doctorSampleSummary.length
+      ? `สุ่มแยกตามแพทย์: ${doctorSampleSummary.map((item) => `${item.doctorName} (${item.doctorCode}) ${item.mode === 'percent' ? `${item.value}%` : `${item.value} เคส`} ได้ ${item.sampled}/${item.available}`).join(', ')}`
+      : '';
+
     await executeMra(
       `INSERT INTO mra_sampling_batch 
-        (batch_id, sampling_date, case_type, date_from, date_to, sample_size, total_available, department_code, created_by)
-       VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?)`,
+        (batch_id, sampling_date, case_type, date_from, date_to, sample_size, total_available, department_code, created_by, note)
+       VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         batchId,
         caseType,
@@ -183,6 +226,7 @@ export async function POST(req: NextRequest) {
         totalAvailable,
         clinicCode || null,
         finalAuditorName,
+        planNote || null,
       ]
     );
 
@@ -231,6 +275,7 @@ export async function POST(req: NextRequest) {
         clinicCode: clinicCode || undefined,
         sampleSize: samples.length,
         totalAvailable,
+        doctorSampleSummary,
         auditorName: finalAuditorName,
       },
     });
@@ -241,6 +286,7 @@ export async function POST(req: NextRequest) {
         batchId,
         totalAvailable,
         sampleCount: samples.length,
+        doctorSampleSummary,
         samples: samples.map((s, idx) => ({
           itemId: `${batchId}-${idx + 1}`,
           vn: s.vn,

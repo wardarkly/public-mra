@@ -1,0 +1,26 @@
+services:
+  mra-db-dev:
+    image: mysql:8.0
+    container_name: mra-db-dev
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: mra_dev
+      MYSQL_USER: mra_dev
+      MYSQL_PASSWORD: mra_dev_local_only
+      MYSQL_ROOT_PASSWORD: mra_dev_root_local_only
+      TZ: Asia/Bangkok
+    ports:
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - mra_mysql_dev_data:/var/lib/mysql
+      # This checked-in dump contains table definitions only (no INSERT statements).
+      - ./database/db_mra_prod_202610091047.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping --host=127.0.0.1 --user=root --password=\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  mra_mysql_dev_data:
+    name: mra_mysql_dev_data
